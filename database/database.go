@@ -14,6 +14,7 @@ var db *sql.DB
 
 var (
 	Accounts *eplidr.Table
+	Payments *eplidr.Table
 )
 
 func InitDatabase() error {
@@ -34,6 +35,7 @@ func InitDatabase() error {
 	//Users = eplidr.NewKeyTable("users", db)
 	//SingleUsers = eplidr.SingleKeyImplementation(Users, "name")
 	//EmailCodes = eplidr.NewSingleKeyTable("emailcodes", "name", db)
+	Payments = eplidr.NewKeyTable("payments", db)
 	Accounts = eplidr.NewKeyTable("accounts", db)
 	return nil
 }

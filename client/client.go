@@ -115,6 +115,19 @@ func GetBalance(accountId uint64, password string) (uint64, Status, error) {
 	return json.GetUint64("data"), getStatus(json), nil
 }
 
+func CreateAccount(username string, password string, currency int) (uint64, Status, error) {
+	body, err := post("createAccount", fmt.Sprintf(`{"username":"%s","password":"%s","currency":%d}`, username, password, currency))
+	if err != nil {
+		return 0, 0, err
+	}
+	var p fastjson.Parser
+	json, err := p.ParseBytes(body)
+	if err != nil {
+		return 0, 0, err
+	}
+	return json.GetUint64("data"), getStatus(json), nil
+}
+
 func print(data interface{}, status Status, err error) {
 	if err != nil {
 		fmt.Println("ERR: " + err.Error())
@@ -156,6 +169,20 @@ func main() {
 			password := args[1]
 			balance, status, err := GetBalance(id, password)
 			print(balance, status, err)
+		} else if strings.Compare("createAccount", cmd) == 0 {
+			if len(args) < 3 {
+				fmt.Println("Wrong args")
+				continue
+			}
+			username := args[0]
+			password := args[1]
+			currency, err := strconv.Atoi(args[2])
+			if err != nil {
+				fmt.Println(err.Error())
+				continue
+			}
+			data, status, err := CreateAccount(username, password, currency)
+			print(data, status, err)
 		} else if strings.Compare("sendPayment", cmd) == 0 {
 			if len(args) < 4 {
 				fmt.Println("Wrong args")

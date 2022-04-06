@@ -180,7 +180,6 @@ func (table *Table) Put(columns []string, values []interface{}) error {
 		}
 	}
 	query := fmt.Sprintf("INSERT INTO `%s` (%s) values (%s);", table.name, columnsString, valuesString)
-	log.InfoLogger.Println(query)
 	_, err := table.Driver.Exec(query)
 	if err != nil {
 		return err
@@ -261,4 +260,8 @@ func (table *Table) ExecTx(query ...string) error {
 		}
 	}
 	return nil
+}
+
+func (table *Table) SingleSet(keyName string, key interface{}, column string, value interface{}) error {
+	return table.Set(keyName, key, []string{column}, []interface{}{value})
 }

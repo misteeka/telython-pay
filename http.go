@@ -46,6 +46,10 @@ func RespondGet(ctx *fiber.Ctx, status Status, resp interface{}) error {
 	return err
 }
 
+func RespondJson(ctx *fiber.Ctx, status Status, json []byte) {
+
+}
+
 func Respond(ctx *fiber.Ctx, status Status) error {
 	json := fmt.Sprintf(`{"status": %d}`, status)
 	_, err := ctx.WriteString(json)
@@ -67,7 +71,21 @@ func authorize(accountId uint64, password string) Status {
 		return AUTHORIZATION_FAILED
 	}
 	resp, err := auth.CheckPassword(username, password)
-	log.InfoLogger.Println(resp)
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return INTERNAL_SERVER_ERROR
+	}
+	if bytes.Equal(resp, auth.AUTHORIZATION_FAILED) {
+		return AUTHORIZATION_FAILED
+	} else if bytes.Equal(resp, auth.SUCCESS) {
+		return SUCCESS
+	} else {
+		return INTERNAL_SERVER_ERROR
+	}
+}
+
+func authorizeUsername(username string, password string) Status {
+	resp, err := auth.CheckPassword(username, password)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return INTERNAL_SERVER_ERROR
@@ -141,6 +159,23 @@ func registerHandlers() {
 		authorizationStatus := authorize(accountId, password)
 		if authorizationStatus == SUCCESS {
 			resp, status := getBalance(accountId)
+			return RespondGet(ctx, status, resp)
+		} else {
+			return Respond(ctx, authorizationStatus)
+		}
+	})
+	app.Post("/payments/createAccount", func(ctx *fiber.Ctx) error {
+		data, err := Deserialize(ctx.Body())
+		if err != nil {
+			return Respond(ctx, INVALID_REQUEST)
+		}
+		username := string(data.GetStringBytes("username"))
+		currency := data.GetInt("currency")
+		password := string(data.GetStringBytes("password"))
+
+		authorizationStatus := authorizeUsername(username, password)
+		if authorizationStatus == SUCCESS {
+			resp, status := createAccount(username, currency)
 			return RespondGet(ctx, status, resp)
 		} else {
 			return Respond(ctx, authorizationStatus)
