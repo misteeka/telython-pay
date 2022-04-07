@@ -15,7 +15,7 @@ type Table struct {
 	Driver *sql.DB
 }
 
-func NewKeyTable(name string, driver *sql.DB, params ...string) *Table {
+func NewTable(name string, driver *sql.DB, params ...string) *Table {
 	// params:
 	// [0] dataSource
 	// [1]
@@ -240,8 +240,15 @@ func (table *Table) ReleaseRows(rows *sql.Rows) {
 	}
 }
 
-func (table *Table) Begin() (*sql.Tx, error) {
-	return table.Driver.Begin()
+func (table *Table) Begin() (*Tx, error) {
+	driver, err := table.Driver.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &Tx{
+		table:  table,
+		driver: driver,
+	}, nil
 }
 
 func (table *Table) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {

@@ -10,11 +10,10 @@ import (
 	"time"
 )
 
-var db *sql.DB
-
 var (
-	Accounts *eplidr.Table
-	Payments *eplidr.Table
+	Accounts   *eplidr.Table
+	Payments   *eplidr.Table
+	LastActive *eplidr.SingleKeyTable
 )
 
 func InitDatabase() error {
@@ -23,20 +22,18 @@ func InitDatabase() error {
 	dataSource = strings.Replace(dataSource, "{user}", cfg.GetString("user"), 1)
 	dataSource = strings.Replace(dataSource, "{password}", cfg.GetString("password"), 1)
 	dataSource = strings.Replace(dataSource, "{db}", cfg.GetString("dbName"), 1)
-	db, err = sql.Open("mysql", dataSource)
+	defaultDriver, err := sql.Open("mysql", dataSource)
 	if err != nil {
 		return err
 	}
-	db.SetConnMaxLifetime(2 * time.Minute)
-	db.SetConnMaxIdleTime(2 * time.Minute)
-	db.SetMaxIdleConns(10)
-	db.SetMaxOpenConns(10)
+	defaultDriver.SetConnMaxLifetime(1 * time.Minute)
+	defaultDriver.SetConnMaxIdleTime(30 * time.Second)
+	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
+	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	//Users = eplidr.NewKeyTable("users", db)
-	//SingleUsers = eplidr.SingleKeyImplementation(Users, "name")
-	//EmailCodes = eplidr.NewSingleKeyTable("emailcodes", "name", db)
-	Payments = eplidr.NewKeyTable("payments", db)
-	Accounts = eplidr.NewKeyTable("accounts", db)
+	Payments = eplidr.NewTable("payments", defaultDriver)
+	Accounts = eplidr.NewTable("accounts", defaultDriver)
+	LastActive = eplidr.NewSingleKeyTable("lastactive", "name", defaultDriver)
 	return nil
 }
 func ReleaseRows(rows *sql.Rows) {

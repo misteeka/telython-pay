@@ -16,6 +16,9 @@ var (
 func GetString(key string) string {
 	return string(Value.GetStringBytes(key))
 }
+func GetInt(key string) int {
+	return Value.GetInt(key)
+}
 
 func LoadConfig() error {
 	var json string

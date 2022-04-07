@@ -4,6 +4,8 @@ github.com/klauspost/compress v1.14.1 h1:hLQYb23E8/fO+1u53d02A97a8UnsddcvYzq4ERR
 github.com/klauspost/compress v1.14.1/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
 github.com/misteeka/fasthttp v0.0.0-20220226143719-f026fab4cd34 h1:KpYJZQARcl2EMZCtrxAfR01VOhV0X6pPvHZSrpo3TCQ=
 github.com/misteeka/fasthttp v0.0.0-20220226143719-f026fab4cd34/go.mod h1:xZ5QUSFN6cCVUzlvfj+kSaD/uQ2XsRzLKHZRIxTTGcg=
+github.com/misteeka/telython-auth-client v0.0.0-20220405121852-90e62d984fc2 h1:LFOJUaW1iJLtbvDbxScZYOwFugd8qxAGO28jJUXOHvU=
+github.com/misteeka/telython-auth-client v0.0.0-20220405121852-90e62d984fc2/go.mod h1:CJL9M6bZVnn6PT8zjeSi2532wjs/zAmik2W/l0UDGzw=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.33.0 h1:mHBKd98J5NcXuBddgjvim1i3kWzlng1SzLhrnBOU9g8=

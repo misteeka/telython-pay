@@ -2,12 +2,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	transport "github.com/misteeka/fasthttp"
+	auth "github.com/misteeka/telython-auth-client"
 	"github.com/valyala/fastjson"
+	"log"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Response interface{}
@@ -23,6 +28,7 @@ var (
 	NOT_FOUND              Status = 106
 	WRONG_AMOUNT           Status = 107
 	INSUFFICIENT_FUNDS     Status = 108
+	TOO_MANY_REQUESTS      Status = 109
 )
 
 func statusToString(status Status) string {
@@ -52,6 +58,9 @@ func statusToString(status Status) string {
 	}
 	if status == INSUFFICIENT_FUNDS {
 		return "INSUFFICIENT FUNDS"
+	}
+	if status == TOO_MANY_REQUESTS {
+		return "TOO MANY REQUESTS"
 	}
 	return fmt.Sprintf("%v", status)
 
@@ -143,6 +152,48 @@ func print(data interface{}, status Status, err error) {
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Telython Pay Shell")
+
+	rand.Seed(time.Now().UnixMicro())
+	id := strconv.Itoa(rand.Intn(1000000))
+	authStatus, err := auth.SignUp(id, id, "123456")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	if bytes.Equal(authStatus, auth.SUCCESS) {
+		fmt.Println("create sender")
+		sender, status, err := CreateAccount(id, id, 0)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		if status != SUCCESS {
+			fmt.Println(statusToString(status))
+		}
+		fmt.Println("create receiver")
+		receiver, status, err := CreateAccount(id, id, 0)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		if status != SUCCESS {
+			fmt.Println(statusToString(status))
+		}
+		fmt.Println("sending payments")
+		for i := 0; i < 1000; i++ {
+			start := time.Now()
+			status, err = SendPayment(sender, receiver, 1, id)
+			if status != SUCCESS {
+				fmt.Println(statusToString(status))
+			}
+			fmt.Println(statusToString(status), time.Now().Sub(start).Milliseconds(), "ms")
+		}
+	} else {
+
+	}
+	log.Println("Done")
+	return
+
 	fmt.Println("---------------------")
 	for {
 		fmt.Print("-> ")

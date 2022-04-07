@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"main/account"
 	"main/database"
+	"main/log"
 	"strconv"
-	"time"
 )
 
 type Payment struct {
-	Id       uint64
-	Sender   uint64
-	Receiver uint64
-	Amount   uint64
-	Currency int
-	Status   Status
-	Tx       *sql.Tx
+	Id        uint64
+	Sender    uint64
+	Receiver  uint64
+	Amount    uint64
+	Timestamp uint64
+	Currency  int
+	Tx        *sql.Tx
 }
 
 func fnv64(key string) uint64 {
@@ -30,27 +30,17 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func New(sender *account.Account, receiver *account.Account, amount uint64, tx *sql.Tx) (*Payment, error) {
+func New(sender *account.Account, receiver *account.Account, amount uint64, tx *sql.Tx, timestamp uint64) *Payment {
 	payment := Payment{
-		Id:       fnv64(strconv.FormatUint(sender.Id, 10) + strconv.FormatUint(receiver.Id, 10) + strconv.FormatInt(time.Now().UnixMicro(), 10)),
-		Sender:   sender.Id,
-		Receiver: receiver.Id,
-		Amount:   amount,
-		Currency: sender.Currency,
-		Status:   PROCESSING,
-		Tx:       tx,
+		Id:        fnv64(strconv.FormatUint(sender.Id, 10) + strconv.FormatUint(receiver.Id, 10) + strconv.FormatUint(timestamp, 10)),
+		Sender:    sender.Id,
+		Receiver:  receiver.Id,
+		Amount:    amount,
+		Currency:  sender.Currency,
+		Tx:        tx,
+		Timestamp: timestamp,
 	}
-	err := database.Payments.Put([]string{"id", "sender", "receiver", "amount", "currency", "status"},
-		[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Currency, payment.Status})
-	if err != nil {
-		return nil, err
-	}
-	return &payment, nil
-}
-
-func (payment *Payment) SetStatus(status Status) error {
-	payment.Status = status
-	return database.Payments.SingleSet("id", payment.Id, "status", status)
+	return &payment
 }
 
 func (payment *Payment) Transfer() error {
@@ -58,7 +48,7 @@ func (payment *Payment) Transfer() error {
 	if err != nil {
 		return err
 	}
-	_, err = payment.Tx.Exec(fmt.Sprintf("UPDATE `accounts` SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Sender))
+	_, err = payment.Tx.Exec(fmt.Sprintf("UPDATE `accounts` SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Receiver))
 	if err != nil {
 		return err
 	}
@@ -66,18 +56,31 @@ func (payment *Payment) Transfer() error {
 }
 
 func (payment *Payment) Commit() error {
-	err := payment.SetStatus(SUCCESS)
+	err := payment.Tx.Commit()
 	if err != nil {
 		return err
 	}
-	return payment.Tx.Commit()
+	return database.Payments.Put([]string{"id", "sender", "receiver", "amount", "currency", "status", "timestamp"},
+		[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Currency, SUCCESS, payment.Timestamp})
 }
 
 func (payment *Payment) Fail() {
-	payment.SetStatus(FAILED)
-	payment.Tx.Rollback()
+	err := payment.Tx.Rollback()
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+	}
+	err = database.Payments.Put([]string{"id", "sender", "receiver", "amount", "currency", "status", "timestamp"},
+		[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Currency, FAILED, payment.Timestamp})
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+	}
 }
 
 func (payment *Payment) Rollback() error {
-	return payment.Tx.Rollback()
+	err := payment.Tx.Rollback()
+	if err != nil {
+		return err
+	}
+	return database.Payments.Put([]string{"id", "sender", "receiver", "amount", "currency", "status", "timestamp"},
+		[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Currency, FAILED, payment.Timestamp})
 }
