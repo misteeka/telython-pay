@@ -11,12 +11,12 @@ type SingleKeyTable struct {
 	key      string
 }
 
-func NewSingleKeyTable(name string, key string, driver *sql.DB, params ...string) *SingleKeyTable {
+func NewSingleKeyTable(name string, key string, shardsCount uint, creatingQuery string, drivers Drivers) *SingleKeyTable {
 	// params:
 	// [0] dataSource
 	// [1]
 	return &SingleKeyTable{
-		KeyTable: NewTable(name, driver, params...),
+		KeyTable: NewTable(name, shardsCount, creatingQuery, drivers),
 		key:      key,
 	}
 }
@@ -80,7 +80,7 @@ func (table *SingleKeyTable) SingleSet(key interface{}, column string, data inte
 }
 
 func (table *SingleKeyTable) Put(key interface{}, columns []string, values []interface{}) error {
-	return table.KeyTable.Put(append(columns, table.key), append(values, key))
+	return table.KeyTable.Put(table.key, key, columns, values)
 }
 
 func (table *SingleKeyTable) Remove(key interface{}) error {
@@ -96,30 +96,9 @@ func (table *SingleKeyTable) ReleaseRows(rows *sql.Rows) {
 }
 
 func (table *SingleKeyTable) Begin() (*Tx, error) {
-	driver, err := table.KeyTable.Driver.Begin()
-	if err != nil {
-		return nil, err
-	}
-	return &Tx{
-		table:  table.KeyTable,
-		driver: driver,
-	}, nil
+	return nil, nil
 }
 
 func (table *SingleKeyTable) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	return table.KeyTable.Driver.BeginTx(ctx, opts)
-}
-
-func (table *SingleKeyTable) ExecTx(query ...string) error {
-	tx, err := table.KeyTable.Driver.Begin()
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(query); i++ {
-		_, err = tx.Exec(query[i])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return nil, nil
 }

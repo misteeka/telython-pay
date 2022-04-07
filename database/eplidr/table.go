@@ -11,18 +11,43 @@ import (
 )
 
 type Table struct {
-	name   string
-	Driver *sql.DB
+	name        string
+	shardsCount uint
+	Drivers     []*sql.DB
+
+	creatingQuery string
+
+	hashFunc func(interface{}) uint
 }
 
-func NewTable(name string, driver *sql.DB, params ...string) *Table {
-	// params:
-	// [0] dataSource
-	// [1]
-	return &Table{
-		name:   name,
-		Driver: driver,
+type Drivers interface{}
+
+func NewTable(name string, shardsCount uint, creatingQuery string, driverParam Drivers) *Table {
+	var table *Table
+	switch dataSource := driverParam.(type) {
+	case []*sql.DB:
+		table = &Table{
+			name:          name,
+			Drivers:       dataSource,
+			shardsCount:   shardsCount,
+			creatingQuery: creatingQuery,
+			hashFunc:      StandardGetShardFunc,
+		}
+	case *sql.DB:
+		drivers := make([]*sql.DB, shardsCount)
+		for i := 0; i < int(shardsCount); i++ {
+			drivers[i] = dataSource
+		}
+		table = &Table{
+			name:          name,
+			Drivers:       drivers,
+			shardsCount:   shardsCount,
+			creatingQuery: creatingQuery,
+			hashFunc:      StandardGetShardFunc,
+		}
 	}
+	table.init()
+	return table
 }
 
 func Serialize(value interface{}) string {
@@ -80,6 +105,27 @@ func value(value interface{}) string {
 		return strconv.FormatFloat(v, 'E', -1, 64)
 	default:
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+func (table *Table) getName(shard uint) string {
+	return table.name + strconv.FormatUint(uint64(shard), 10)
+}
+
+func (table *Table) getShard(key interface{}) uint {
+	return table.hashFunc(key) % table.shardsCount
+}
+func (table *Table) init() {
+	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "uint64", "BIGINT UNSIGNED")
+	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "int", "INTEGER")
+	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "{nn}", "NOT NULL")
+	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "{n}", "NULL")
+	for i := 0; i < len(table.Drivers); i++ {
+		_, err := table.Drivers[i].Exec(strings.Replace(table.creatingQuery, "{table}", table.name+strconv.Itoa(i), 1))
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
 	}
 }
 
@@ -141,14 +187,15 @@ func (table *Table) GetBoolean(keyName interface{}, key interface{}, column stri
 }
 
 func (table *Table) Get(keyName interface{}, key interface{}, columns []string, data []interface{}) (error, bool) {
-	query := fmt.Sprintf("SELECT %s FROM `%s` WHERE `%v` = %s;", columnSliceToString(columns...), table.name, keyName, value(key))
-	rows, err := table.Driver.Query(query)
+	query := fmt.Sprintf("SELECT %s FROM {table} WHERE `%v` = %s;", columnSliceToString(columns...), keyName, value(key))
+	rows, err := table.Query(query, value(key))
 	if err != nil {
 		return err, false
 	}
 	if rows.Next() {
 		err := rows.Scan(data...)
 		if err != nil {
+			rows.Close()
 			return err, true
 		}
 		rows.Close()
@@ -158,13 +205,15 @@ func (table *Table) Get(keyName interface{}, key interface{}, columns []string, 
 	}
 	return nil, true
 }
-func (table *Table) Put(columns []string, values []interface{}) error {
+func (table *Table) Put(keyName interface{}, key interface{}, columns []string, values []interface{}) error {
 	// `%s` = ?
 	if len(columns) != len(values) {
 		return errors.New("keyTable.Put : len(columns) != len(data) ")
 	}
 	columnsString := ""
 	valuesString := ""
+	columns = append(columns, fmt.Sprintf("%v", keyName))
+	values = append(values, key)
 	for i := 0; i < len(columns); i++ {
 		if i == len(columns)-1 {
 			columnsString += fmt.Sprintf("`%s`", columns[i])
@@ -179,15 +228,14 @@ func (table *Table) Put(columns []string, values []interface{}) error {
 			valuesString += fmt.Sprintf("%s, ", value(values[i]))
 		}
 	}
-	query := fmt.Sprintf("INSERT INTO `%s` (%s) values (%s);", table.name, columnsString, valuesString)
-	_, err := table.Driver.Exec(query)
+	query := fmt.Sprintf("INSERT INTO {table} (%s) values (%s);", columnsString, valuesString)
+	_, err := table.Exec(query, value(key))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 func (table *Table) Set(keyName interface{}, key interface{}, columns []string, values []interface{}) error {
-	// `%s` = ?
 	if len(columns) != len(values) {
 		return errors.New("keyTable.Set : len(columns) != len(values) ")
 	}
@@ -199,37 +247,31 @@ func (table *Table) Set(keyName interface{}, key interface{}, columns []string, 
 			s += fmt.Sprintf("`%s` = %s, ", columns[i], value(values[i]))
 		}
 	}
-	query := fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` = %s;", table.name, s, keyName, value(key))
-	_, err := table.Exec(query)
+	query := fmt.Sprintf("UPDATE {table} SET %s WHERE `%s` = %s;", s, keyName, value(key))
+	_, err := table.Exec(query, value(key))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 func (table *Table) Remove(keyName interface{}, key interface{}) error {
-	query := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = %s;", table.name, keyName, value(key))
-	_, err := table.Exec(query)
+	query := fmt.Sprintf("DELETE FROM `{table}` WHERE `%s` = %s;", keyName, value(key))
+	_, err := table.Exec(query, value(key))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (table *Table) Exec(query string, args ...any) (sql.Result, error) {
-	query = strings.ReplaceAll(query, "{table_name}", fmt.Sprintf("`%s`", table.name))
-	return table.Driver.Exec(query, args...)
+func (table *Table) Exec(query string, key interface{}) (sql.Result, error) {
+	shardNum := table.getShard(key)
+	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", table.getName(shardNum)), 1)
+	return table.Drivers[shardNum].Exec(query)
 }
-
-func (table *Table) ExecSlice(query ...string) (sql.Result, error) {
-	finalQuery := strings.Join(query, "\n")
-	finalQuery = strings.ReplaceAll(finalQuery, "{table_name}", fmt.Sprintf("`%s`", table.name))
-	log.InfoLogger.Println(finalQuery)
-	return table.Driver.Exec(finalQuery)
-}
-
-func (table *Table) Query(query string, args ...any) (*sql.Rows, error) {
-	query = strings.ReplaceAll(query, "{table_name}", fmt.Sprintf("`%s`", table.name))
-	return table.Driver.Query(query, args...)
+func (table *Table) Query(query string, key interface{}) (*sql.Rows, error) {
+	shardNum := table.getShard(key)
+	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", table.getName(shardNum)), 1)
+	return table.Drivers[shardNum].Query(query)
 }
 
 func (table *Table) ReleaseRows(rows *sql.Rows) {
@@ -240,23 +282,24 @@ func (table *Table) ReleaseRows(rows *sql.Rows) {
 	}
 }
 
-func (table *Table) Begin() (*Tx, error) {
-	driver, err := table.Driver.Begin()
-	if err != nil {
-		return nil, err
+func (table *Table) Begin() *Tx {
+	tx := &Tx{
+		table:   table,
+		drivers: make(map[uint]*sql.Tx),
 	}
-	return &Tx{
-		table:  table,
-		driver: driver,
-	}, nil
+	return tx
+}
+
+func (table *Table) RawTx(key interface{}) (*sql.Tx, error) {
+	return table.Drivers[table.getShard(key)].Begin()
 }
 
 func (table *Table) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	return table.Driver.BeginTx(ctx, opts)
+	return table.Drivers[0].BeginTx(ctx, opts)
 }
 
 func (table *Table) ExecTx(query ...string) error {
-	tx, err := table.Driver.Begin()
+	tx, err := table.Drivers[0].Begin()
 	if err != nil {
 		return err
 	}

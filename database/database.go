@@ -31,9 +31,25 @@ func InitDatabase() error {
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Payments = eplidr.NewTable("payments", defaultDriver)
-	Accounts = eplidr.NewTable("accounts", defaultDriver)
-	LastActive = eplidr.NewSingleKeyTable("lastactive", "name", defaultDriver)
+	Payments = eplidr.NewTable(
+		"payments",
+		128,
+		"CREATE TABLE IF NOT EXISTS `{table}` (`id` uint64 {nn} primary key,`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`currency` int {nn},`status` int {nn},`timestamp` uint64 {nn});",
+		defaultDriver,
+	)
+	Accounts = eplidr.NewTable(
+		"accounts",
+		128,
+		"CREATE TABLE IF NOT EXISTS `{table}` (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `balance` uint64 {nn}, `currency` int default 0 {nn});",
+		defaultDriver,
+	)
+	/*LastActive = eplidr.NewSingleKeyTable(
+		"lastactive",
+		"name",
+		1,
+		``,
+		defaultDriver,
+	)*/
 	return nil
 }
 func ReleaseRows(rows *sql.Rows) {

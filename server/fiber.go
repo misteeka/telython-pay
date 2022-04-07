@@ -1,12 +1,10 @@
 package server
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
-	auth "github.com/misteeka/telython-auth-client"
 	"github.com/valyala/fastjson"
 	"main/log"
 	"main/status"
@@ -195,18 +193,20 @@ func getUniqueTimestamp(username string) (uint64, status.Status) {
 }
 
 func authorize(username string, password string) status.Status {
-	resp, err := auth.CheckPassword(username, password)
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		return status.INTERNAL_SERVER_ERROR
-	}
-	if bytes.Equal(resp, auth.AUTHORIZATION_FAILED) {
-		return status.AUTHORIZATION_FAILED
-	} else if bytes.Equal(resp, auth.SUCCESS) {
-		return status.SUCCESS
-	} else {
-		return status.INTERNAL_SERVER_ERROR
-	}
+	/*
+		resp, err := auth.CheckPassword(username, password)
+		if err != nil {
+			log.ErrorLogger.Println(err.Error())
+			return status.INTERNAL_SERVER_ERROR
+		}
+		if bytes.Equal(resp, auth.AUTHORIZATION_FAILED) {
+			return status.AUTHORIZATION_FAILED
+		} else if bytes.Equal(resp, auth.SUCCESS) {
+			return status.SUCCESS
+		} else {
+			return status.INTERNAL_SERVER_ERROR
+		}*/
+	return status.SUCCESS
 }
 
 func Serialize(i interface{}) []byte {
@@ -279,6 +279,7 @@ func registerHandlers() {
 
 		username, found, err := getUsername(accountId)
 		if err != nil {
+			log.ErrorLogger.Println(err.Error())
 			return status.INTERNAL_SERVER_ERROR, nil
 		}
 		if !found {

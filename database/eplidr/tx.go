@@ -4,14 +4,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"main/log"
 	"strings"
 )
 
 type Tx struct {
-	table  *Table
-	driver *sql.Tx
+	table   *Table
+	drivers map[uint]*sql.Tx
 }
+
+// keys := make([]keyType, 0, len(myMap))
+// values := make([]valueType, 0, len(myMap))
 
 func (tx *Tx) GetString(keyName interface{}, key interface{}, column string) (string, bool, error) {
 	var result string
@@ -62,9 +64,23 @@ func (tx *Tx) GetBoolean(keyName interface{}, key interface{}, column string) (b
 	return result, found, nil
 }
 
+func (tx *Tx) getDriver(shard uint) (*sql.Tx, error) {
+	driver, ok := tx.drivers[shard]
+	var err error
+	if !ok {
+		driver, err = tx.table.Drivers[shard].Begin()
+		if err != nil {
+			return nil, err
+		}
+		tx.drivers[shard] = driver
+	}
+	return driver, nil
+}
+
 func (tx *Tx) Get(keyName interface{}, key interface{}, columns []string, data []interface{}) (error, bool) {
-	query := fmt.Sprintf("SELECT %s FROM `%s` WHERE `%v` = %s FOR UPDATE;", columnSliceToString(columns...), tx.table.name, keyName, value(key))
-	rows, err := tx.driver.Query(query)
+	shard := tx.table.getShard(key)
+	query := fmt.Sprintf("SELECT %s FROM `%s` WHERE `%v` = %s FOR UPDATE;", columnSliceToString(columns...), tx.table.getName(shard), keyName, value(key))
+	rows, err := tx.Query(query, key)
 	if err != nil {
 		rows.Close()
 		return err, false
@@ -82,8 +98,12 @@ func (tx *Tx) Get(keyName interface{}, key interface{}, columns []string, data [
 	}
 	return nil, true
 }
-func (tx *Tx) Put(columns []string, values []interface{}) error {
-	// `%s` = ?
+func (tx *Tx) Put(keyName interface{}, key interface{}, columns []string, values []interface{}) error {
+	shard := tx.table.getShard(key)
+	driver, err := tx.getDriver(shard)
+	if err != nil {
+		return err
+	}
 	if len(columns) != len(values) {
 		return errors.New("keyTable.Put : len(columns) != len(data) ")
 	}
@@ -104,14 +124,18 @@ func (tx *Tx) Put(columns []string, values []interface{}) error {
 		}
 	}
 	query := fmt.Sprintf("INSERT INTO `%s` (%s) values (%s);", tx.table.name, columnsString, valuesString)
-	_, err := tx.driver.Exec(query)
+	_, err = driver.Exec(query)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 func (tx *Tx) Set(keyName interface{}, key interface{}, columns []string, values []interface{}) error {
-	// `%s` = ?
+	shard := tx.table.getShard(key)
+	driver, err := tx.getDriver(shard)
+	if err != nil {
+		return err
+	}
 	if len(columns) != len(values) {
 		return errors.New("keyTable.Set : len(columns) != len(values) ")
 	}
@@ -124,36 +148,40 @@ func (tx *Tx) Set(keyName interface{}, key interface{}, columns []string, values
 		}
 	}
 	query := fmt.Sprintf("UPDATE `%s` SET %s WHERE `%s` = %s;", tx.table.name, s, keyName, value(key))
-	_, err := tx.driver.Exec(query)
+	_, err = driver.Exec(query)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 func (tx *Tx) Remove(keyName interface{}, key interface{}) error {
-	query := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = %s;", tx.table.name, keyName, value(key))
-	_, err := tx.driver.Exec(query)
+	shard := tx.table.getShard(key)
+	query := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = %s;", tx.table.getName(shard), keyName, value(key))
+	_, err := tx.drivers[shard].Exec(query)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tx *Tx) Exec(query string, args ...any) (sql.Result, error) {
-	query = strings.ReplaceAll(query, "{table_name}", fmt.Sprintf("`%s`", tx.table.name))
-	return tx.driver.Exec(query, args...)
+func (tx *Tx) Exec(query string, key interface{}) (sql.Result, error) {
+	shard := tx.table.getShard(key)
+	driver, err := tx.getDriver(shard)
+	if err != nil {
+		return nil, err
+	}
+	query = strings.ReplaceAll(query, "{table}", fmt.Sprintf("`%s`", tx.table.getName(shard)))
+	return driver.Exec(query)
 }
 
-func (tx *Tx) ExecSlice(query ...string) (sql.Result, error) {
-	finalQuery := strings.Join(query, "\n")
-	finalQuery = strings.ReplaceAll(finalQuery, "{table_name}", fmt.Sprintf("`%s`", tx.table.name))
-	log.InfoLogger.Println(finalQuery)
-	return tx.driver.Exec(finalQuery)
-}
-
-func (tx *Tx) Query(query string, args ...any) (*sql.Rows, error) {
-	query = strings.ReplaceAll(query, "{table_name}", fmt.Sprintf("`%s`", tx.table.name))
-	return tx.driver.Query(query, args...)
+func (tx *Tx) Query(query string, key interface{}) (*sql.Rows, error) {
+	shard := tx.table.getShard(key)
+	driver, err := tx.getDriver(shard)
+	if err != nil {
+		return nil, err
+	}
+	query = strings.ReplaceAll(query, "{table}", fmt.Sprintf("`%s`", tx.table.getName(shard)))
+	return driver.Query(query)
 }
 
 func (tx *Tx) SingleSet(keyName string, key interface{}, column string, value interface{}) error {
@@ -161,12 +189,13 @@ func (tx *Tx) SingleSet(keyName string, key interface{}, column string, value in
 }
 
 func (tx *Tx) Commit() error {
-	return tx.driver.Commit()
+	return nil
 }
 
 func (tx *Tx) Rollback() error {
-	return tx.driver.Rollback()
+	return nil
+	//return tx.driver.Rollback()
 }
 func (tx *Tx) Fail() {
-	tx.driver.Rollback()
+	//tx.driver.Rollback()
 }

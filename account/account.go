@@ -3,6 +3,7 @@ package account
 import (
 	"database/sql"
 	"fmt"
+	"main/database"
 )
 
 type Account struct {
@@ -12,23 +13,50 @@ type Account struct {
 	Balance  uint64
 }
 
-func Load(id uint64, tx *sql.Tx) (*Account, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM `accounts` WHERE `id` = %d;", id))
-	if err != nil {
-		return nil, err
+func Load(id uint64, tx *sql.Tx, lock bool) (*Account, error) {
+	var lockStatement string
+	if lock {
+		lockStatement = " FOR UPDATE;"
+	} else {
+		lockStatement = ""
 	}
-	var account Account
-	account.Id = id
-	if rows.Next() {
-		err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
+	if tx == nil {
+		rows, err := database.Accounts.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d%s;", id, lockStatement), id)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
+		var account Account
+		account.Id = id
+		if rows.Next() {
+			err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+		} else {
+			rows.Close()
+			return nil, nil
+		}
+		err = rows.Close()
+		return &account, err
 	} else {
-		rows.Close()
-		return nil, nil
+		rows, err := tx.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d%s;", id, lockStatement))
+		if err != nil {
+			return nil, err
+		}
+		var account Account
+		account.Id = id
+		if rows.Next() {
+			err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+		} else {
+			rows.Close()
+			return nil, nil
+		}
+		err = rows.Close()
+		return &account, err
 	}
-	err = rows.Close()
-	return &account, err
 }

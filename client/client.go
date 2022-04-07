@@ -2,17 +2,13 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	transport "github.com/misteeka/fasthttp"
 	auth "github.com/misteeka/telython-auth-client"
 	"github.com/valyala/fastjson"
-	"log"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Response interface{}
@@ -152,8 +148,8 @@ func print(data interface{}, status Status, err error) {
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Telython Pay Shell")
-
-	rand.Seed(time.Now().UnixMicro())
+	fmt.Println(auth.SUCCESS)
+	/*rand.Seed(time.Now().UnixMicro())
 	id := strconv.Itoa(rand.Intn(1000000))
 	authStatus, err := auth.SignUp(id, id, "123456")
 	if err != nil {
@@ -192,7 +188,7 @@ func main() {
 
 	}
 	log.Println("Done")
-	return
+	return*/
 
 	fmt.Println("---------------------")
 	for {
