@@ -33,13 +33,13 @@ func InitDatabase() error {
 
 	Payments = eplidr.NewTable(
 		"payments",
-		128,
+		64,
 		"CREATE TABLE IF NOT EXISTS `{table}` (`id` uint64 {nn} primary key,`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`currency` int {nn},`status` int {nn},`timestamp` uint64 {nn});",
 		defaultDriver,
 	)
 	Accounts = eplidr.NewTable(
 		"accounts",
-		128,
+		64,
 		"CREATE TABLE IF NOT EXISTS `{table}` (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `balance` uint64 {nn}, `currency` int default 0 {nn});",
 		defaultDriver,
 	)

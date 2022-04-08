@@ -315,3 +315,9 @@ func (table *Table) ExecTx(query ...string) error {
 func (table *Table) SingleSet(keyName string, key interface{}, column string, value interface{}) error {
 	return table.Set(keyName, key, []string{column}, []interface{}{value})
 }
+
+func (table *Table) Drop() {
+	for i := 0; i < len(table.Drivers); i++ {
+		table.Drivers[i].Exec(fmt.Sprintf("DROP TABLE %s;", table.getName(uint(i))))
+	}
+}

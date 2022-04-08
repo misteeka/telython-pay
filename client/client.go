@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	transport "github.com/misteeka/fasthttp"
-	auth "github.com/misteeka/telython-auth-client"
 	"github.com/valyala/fastjson"
 	"os"
 	"strconv"
@@ -62,8 +61,10 @@ func statusToString(status Status) string {
 
 }
 
+const ip = "127.0.0.1" // 192.168.1.237
+
 func get(function string) ([]byte, error) {
-	resp, err := transport.Get("http://127.0.0.1:8002/payments/" + function)
+	resp, err := transport.Get(fmt.Sprintf("http://%s:8002/payments/%s", ip, function))
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func get(function string) ([]byte, error) {
 	return response, nil
 }
 func post(function string, data string) ([]byte, error) {
-	resp, err := transport.Post("http://127.0.0.1:8002/payments/"+function, []byte(data))
+	resp, err := transport.Post(fmt.Sprintf("http://%s:8002/payments/%s", ip, function), []byte(data))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,7 @@ func post(function string, data string) ([]byte, error) {
 	return response, nil
 }
 func put(function string, data string) ([]byte, error) {
-	resp, err := transport.Put("http://127.0.0.1:8002/payments/"+function, []byte(data))
+	resp, err := transport.Put(fmt.Sprintf("http://%s:8002/payments/%s", ip, function), []byte(data))
 	if err != nil {
 		return nil, err
 	}
@@ -148,45 +149,34 @@ func print(data interface{}, status Status, err error) {
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Telython Pay Shell")
-	fmt.Println(auth.SUCCESS)
-	/*rand.Seed(time.Now().UnixMicro())
-	id := strconv.Itoa(rand.Intn(1000000))
-	authStatus, err := auth.SignUp(id, id, "123456")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	if bytes.Equal(authStatus, auth.SUCCESS) {
-		fmt.Println("create sender")
-		sender, status, err := CreateAccount(id, id, 0)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-		if status != SUCCESS {
+	/*var wg sync.WaitGroup
+	for a := 0; a < 100; a++ {
+		wg.Add(1)
+		time.Sleep(time.Microsecond)
+		go func() {
+			rand.Seed(time.Now().UnixNano())
+			id := strconv.Itoa(rand.Intn(10000000))
+			sender, status, err := CreateAccount(id, id, 0)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
 			fmt.Println(statusToString(status))
-		}
-		fmt.Println("create receiver")
-		receiver, status, err := CreateAccount(id, id, 0)
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-		if status != SUCCESS {
+			receiver, status, err := CreateAccount(id, id, 0)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
 			fmt.Println(statusToString(status))
-		}
-		fmt.Println("sending payments")
-		for i := 0; i < 1000; i++ {
 			start := time.Now()
-			status, err = SendPayment(sender, receiver, 1, id)
-			if status != SUCCESS {
-				fmt.Println(statusToString(status))
+			for i := 0; i < 100; i++ {
+				SendPayment(sender, receiver, 1, id)
 			}
 			fmt.Println(statusToString(status), time.Now().Sub(start).Milliseconds(), "ms")
-		}
-	} else {
-
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 	log.Println("Done")
 	return*/
 

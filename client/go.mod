@@ -1,7 +1,5 @@
 module main
 
-// github.com/misteeka/telyauth
-
 go 1.18
 
 require (

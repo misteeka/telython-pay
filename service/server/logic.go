@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"main/account"
+	"main/accounts"
 	"main/database"
 	"main/log"
 	"main/payments"
@@ -16,7 +16,7 @@ func getUsername(accountId uint64) (string, bool, error) {
 
 func sendPayment(senderId uint64, receiverId uint64, amount uint64, timestamp uint64) status.Status {
 
-	sender, err := account.Load(senderId, nil, false)
+	sender, err := accounts.Load(senderId, nil, false)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR
@@ -50,19 +50,19 @@ func sendPayment(senderId uint64, receiverId uint64, amount uint64, timestamp ui
 	_, err = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` - %d WHERE `id` = %d;", payment.Amount, payment.Sender), payment.Sender)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
+		_ = database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
 		return status.INTERNAL_SERVER_ERROR
 	}
 	err = database.Payments.SingleSet("id", payment.Id, "status", payments.WITHDRAWN)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Sender), payment.Sender)
+		_, _ = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Sender), payment.Sender)
 		return status.INTERNAL_SERVER_ERROR
 	}
 	_, err = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Receiver), payment.Receiver)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
+		_ = database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
 		return status.INTERNAL_SERVER_ERROR
 	}
 	database.Payments.SingleSet("id", payment.Id, "status", payments.SUCCESS)
@@ -86,13 +86,13 @@ func getHistory(accountId uint64) (status.Status, []uint64) {
 	return 0, nil
 }
 
-func getAccountInfo(accountId uint64) (status.Status, *account.Account) {
+func getAccountInfo(accountId uint64) (status.Status, *accounts.Account) {
 	rows, err := database.Accounts.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d;", accountId), accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR, nil
 	}
-	var account account.Account
+	var account accounts.Account
 	account.Id = accountId
 	if rows.Next() {
 		err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
