@@ -15,14 +15,14 @@ type Table struct {
 	shardsCount uint
 	Drivers     []*sql.DB
 
-	creatingQuery string
+	creatingQuery []string
 
 	hashFunc func(interface{}) uint
 }
 
 type Drivers interface{}
 
-func NewTable(name string, shardsCount uint, creatingQuery string, driverParam Drivers) *Table {
+func NewTable(name string, shardsCount uint, creatingQuery []string, driverParam Drivers) *Table {
 	var table *Table
 	switch dataSource := driverParam.(type) {
 	case []*sql.DB:
@@ -116,15 +116,17 @@ func (table *Table) getShard(key interface{}) uint {
 	return table.hashFunc(key) % table.shardsCount
 }
 func (table *Table) init() {
-	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "uint64", "BIGINT UNSIGNED")
-	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "int", "INTEGER")
-	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "{nn}", "NOT NULL")
-	table.creatingQuery = strings.ReplaceAll(table.creatingQuery, "{n}", "NULL")
-	for i := 0; i < len(table.Drivers); i++ {
-		_, err := table.Drivers[i].Exec(strings.Replace(table.creatingQuery, "{table}", table.name+strconv.Itoa(i), 1))
-		if err != nil {
-			fmt.Println(err.Error())
-			return
+	for i := 0; i < len(table.creatingQuery); i++ {
+		table.creatingQuery[i] = strings.ReplaceAll(table.creatingQuery[i], "uint64", "BIGINT UNSIGNED")
+		table.creatingQuery[i] = strings.ReplaceAll(table.creatingQuery[i], "int", "INTEGER")
+		table.creatingQuery[i] = strings.ReplaceAll(table.creatingQuery[i], "{nn}", "NOT NULL")
+		table.creatingQuery[i] = strings.ReplaceAll(table.creatingQuery[i], "{n}", "NULL")
+		for a := 0; a < len(table.Drivers); a++ {
+			_, err := table.Drivers[a].Exec(strings.Replace(table.creatingQuery[i], "{table}", fmt.Sprintf("`%s`", table.getName(uint(a))), 1))
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
 		}
 	}
 }
@@ -282,14 +284,6 @@ func (table *Table) ReleaseRows(rows *sql.Rows) {
 	}
 }
 
-func (table *Table) Begin() *Tx {
-	tx := &Tx{
-		table:   table,
-		drivers: make(map[uint]*sql.Tx),
-	}
-	return tx
-}
-
 func (table *Table) RawTx(key interface{}) (*sql.Tx, error) {
 	return table.Drivers[table.getShard(key)].Begin()
 }
@@ -320,4 +314,14 @@ func (table *Table) Drop() {
 	for i := 0; i < len(table.Drivers); i++ {
 		table.Drivers[i].Exec(fmt.Sprintf("DROP TABLE %s;", table.getName(uint(i))))
 	}
+}
+
+func (table *Table) GlobalExecUnsafe(query string) error {
+	for i := 0; i < len(table.Drivers); i++ {
+		_, err := table.Drivers[i].Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,21 +1,18 @@
 package payments
 
 import (
-	"database/sql"
-	"fmt"
-	"main/database"
-	"main/log"
+	"main/accounts"
+	"main/database/eplidr"
 	"strconv"
 )
 
 type Payment struct {
 	Id        uint64
-	Sender    uint64
-	Receiver  uint64
+	Sender    *accounts.Account
+	Receiver  *accounts.Account
 	Amount    uint64
 	Timestamp uint64
 	Currency  int
-	Tx        *sql.Tx
 }
 
 func fnv64(key string) uint64 {
@@ -29,56 +26,28 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func New(senderId uint64, receiverId uint64, amount uint64, currency int, timestamp uint64) *Payment {
+func New(sender *accounts.Account, receiver *accounts.Account, amount uint64, timestamp uint64) *Payment {
 	payment := Payment{
-		Id:        fnv64(strconv.FormatUint(senderId, 10) + strconv.FormatUint(receiverId, 10) + strconv.FormatUint(timestamp, 10)),
-		Sender:    senderId,
-		Receiver:  receiverId,
+		Id:        fnv64(strconv.FormatUint(sender.Id, 10) + strconv.FormatUint(receiver.Id, 10) + strconv.FormatUint(timestamp, 10)),
+		Sender:    sender,
+		Receiver:  receiver,
 		Amount:    amount,
-		Currency:  currency,
+		Currency:  sender.Currency,
 		Timestamp: timestamp,
 	}
 	return &payment
 }
 
-func (payment *Payment) Transfer() error {
-	_, err := payment.Tx.Exec(fmt.Sprintf("UPDATE `accounts` SET `balance` = `balance` - %d WHERE `id` = %d;", payment.Amount, payment.Sender))
+func (payment *Payment) Commit(tx *eplidr.Tx) error {
+	err := tx.Put("payments",
+		[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
+		[]interface{}{payment.Id, payment.Sender.Id, payment.Receiver.Id, payment.Amount, payment.Timestamp, payment.Currency})
 	if err != nil {
 		return err
 	}
-	_, err = payment.Tx.Exec(fmt.Sprintf("UPDATE `accounts` SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Receiver))
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func (payment *Payment) Commit() error {
-	err := payment.Tx.Commit()
-	if err != nil {
-		return err
-	}
-	return database.Payments.Put("id", payment.Id, []string{"sender", "receiver", "amount", "currency", "status", "timestamp"},
-		[]interface{}{payment.Sender, payment.Receiver, payment.Amount, payment.Currency, SUCCESS, payment.Timestamp})
-}
-
-func (payment *Payment) Fail() {
-	err := payment.Tx.Rollback()
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-	}
-	err = database.Payments.Put("id", payment.Id, []string{"sender", "receiver", "amount", "currency", "status", "timestamp"},
-		[]interface{}{payment.Sender, payment.Receiver, payment.Amount, payment.Currency, FAILED, payment.Timestamp})
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-	}
-}
-
-func (payment *Payment) Rollback() error {
-	err := payment.Tx.Rollback()
-	if err != nil {
-		return err
-	}
-	return database.Payments.Put("id", payment.Id, []string{"sender", "receiver", "amount", "currency", "status", "timestamp"},
-		[]interface{}{payment.Sender, payment.Receiver, payment.Amount, payment.Currency, FAILED, payment.Timestamp})
 }

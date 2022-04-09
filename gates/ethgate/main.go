@@ -13,10 +13,12 @@ import (
 )
 
 func main() {
-	client, err := ethclient.Dial("http://localhost:7545")
+	client, err := ethclient.Dial("http://localhost:8545")
 	if err != nil {
 		fmt.Println(err.Error())
 		return
+	} else {
+		fmt.Println("Successfully connected to eth client")
 	}
 	r := mux.NewRouter()
 

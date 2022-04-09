@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"main/accounts"
 	"main/database"
 	"main/log"
@@ -15,8 +14,8 @@ func getUsername(accountId uint64) (string, bool, error) {
 }
 
 func sendPayment(senderId uint64, receiverId uint64, amount uint64, timestamp uint64) status.Status {
-
-	sender, err := accounts.Load(senderId, nil, false)
+	// check on currency code mismatch
+	sender, err := accounts.Load(senderId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR
@@ -24,59 +23,72 @@ func sendPayment(senderId uint64, receiverId uint64, amount uint64, timestamp ui
 	if sender == nil {
 		return status.NOT_FOUND
 	}
-	if sender.Balance < amount {
-		return status.INSUFFICIENT_FUNDS
-	}
-	receiverCurrency, found, err := database.Accounts.GetInt("id", receiverId, "currency")
+	receiver, err := accounts.Load(receiverId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR
 	}
-	if !found {
+	if receiver == nil {
 		return status.NOT_FOUND
 	}
-	if receiverCurrency != sender.Currency {
+
+	if sender.Currency != receiver.Currency {
 		return status.CURRENCY_CODE_MISMATCH
 	}
-	payment := payments.New(senderId, receiverId, amount, sender.Currency, timestamp)
-
-	//paymentTx, err := database.Payments.RawTx(payment.Id)
-	err = database.Payments.Put("id", payment.Id, []string{"sender", "receiver", "amount", "timestamp", "currency", "status"}, []interface{}{senderId, receiverId, amount, timestamp, payment.Currency, payments.PROCESSING})
+	// start transaction
+	tx, err := database.LastSerial.Begin(senderId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR
 	}
 
-	_, err = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` - %d WHERE `id` = %d;", payment.Amount, payment.Sender), payment.Sender)
+	balance, err := sender.GetBalance()
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		_ = database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
+		tx.Fail()
 		return status.INTERNAL_SERVER_ERROR
 	}
-	err = database.Payments.SingleSet("id", payment.Id, "status", payments.WITHDRAWN)
+	if balance < amount {
+		tx.Fail()
+		return status.INSUFFICIENT_FUNDS
+	}
+	payment := payments.New(sender, receiver, amount, timestamp)
+
+	err = payment.Commit(tx)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
-		_, _ = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Sender), payment.Sender)
+		tx.Fail()
 		return status.INTERNAL_SERVER_ERROR
 	}
-	_, err = database.Accounts.Exec(fmt.Sprintf("UPDATE {table} SET `balance` = `balance` + %d WHERE `id` = %d;", payment.Amount, payment.Receiver), payment.Receiver)
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		_ = database.Payments.SingleSet("id", payment.Id, "status", payments.FAILED)
-		return status.INTERNAL_SERVER_ERROR
-	}
-	database.Payments.SingleSet("id", payment.Id, "status", payments.SUCCESS)
+	go func() {
+		err := database.Balances.Set(senderId, []string{"onSerial", "balance"}, []interface{}{payment.Timestamp, balance - amount})
+		if err != nil {
+			log.ErrorLogger.Println(err.Error())
+			return
+		}
+		err = database.Balances.Set(receiverId, []string{"onSerial", "balance"}, []interface{}{payment.Timestamp, balance + amount})
+		if err != nil {
+			log.ErrorLogger.Println(err.Error())
+			return
+		}
+	}()
+
 	return status.SUCCESS
 }
 
 func getBalance(accountId uint64) (status.Status, uint64) {
-	balance, found, err := database.Accounts.GetUint64("id", accountId, "balance")
+	account, err := accounts.Load(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR, 0
 	}
-	if !found {
+	if account == nil {
 		return status.NOT_FOUND, 0
+	}
+	balance, err := account.GetBalance()
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return status.INTERNAL_SERVER_ERROR, 0
 	}
 	return status.SUCCESS, balance
 }
@@ -87,23 +99,12 @@ func getHistory(accountId uint64) (status.Status, []uint64) {
 }
 
 func getAccountInfo(accountId uint64) (status.Status, *accounts.Account) {
-	rows, err := database.Accounts.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d;", accountId), accountId)
+	account, err := accounts.Load(accountId)
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR, nil
 	}
-	var account accounts.Account
-	account.Id = accountId
-	if rows.Next() {
-		err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
-		if err != nil {
-			log.ErrorLogger.Println(err.Error())
-			return status.INTERNAL_SERVER_ERROR, nil
-		}
-	} else {
-		return status.NOT_FOUND, nil
-	}
-	return status.SUCCESS, &account
+	return status.SUCCESS, account
 }
 
 func fnv64(key string) uint64 {
@@ -119,7 +120,17 @@ func fnv64(key string) uint64 {
 
 func createAccount(username string, currency int, timestamp uint64) (status.Status, uint64) {
 	accountId := fnv64(username + strconv.FormatUint(timestamp, 10))
-	err := database.Accounts.Put("id", accountId, []string{"name", "balance", "currency"}, []interface{}{username, 1000000, currency})
+	err := database.Accounts.Put("id", accountId, []string{"name", "currency"}, []interface{}{username, currency})
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return status.INTERNAL_SERVER_ERROR, 0
+	}
+	err = database.Balances.Put(accountId, []string{"balance"}, []interface{}{1000000})
+	if err != nil {
+		log.ErrorLogger.Println(err.Error())
+		return status.INTERNAL_SERVER_ERROR, 0
+	}
+	err = database.LastSerial.Put(accountId, []string{"lastSerial"}, []interface{}{timestamp})
 	if err != nil {
 		log.ErrorLogger.Println(err.Error())
 		return status.INTERNAL_SERVER_ERROR, 0

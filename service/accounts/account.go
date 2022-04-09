@@ -1,62 +1,115 @@
 package accounts
 
 import (
-	"database/sql"
 	"fmt"
 	"main/database"
 )
 
 type Account struct {
 	Id       uint64
-	Username string
 	Currency int
-	Balance  uint64
 }
 
-func Load(id uint64, tx *sql.Tx, lock bool) (*Account, error) {
-	var lockStatement string
-	if lock {
-		lockStatement = " FOR UPDATE;"
-	} else {
-		lockStatement = ""
+func Load(id uint64) (*Account, error) {
+	rows, err := database.Accounts.Query(fmt.Sprintf("SELECT `currency` FROM {table} WHERE `id` = %d;", id), id)
+	if err != nil {
+		return nil, err
 	}
-	if tx == nil {
-		rows, err := database.Accounts.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d%s;", id, lockStatement), id)
+	var account Account
+	account.Id = id
+	if rows.Next() {
+		err = rows.Scan(&account.Currency)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
-		var account Account
-		account.Id = id
-		if rows.Next() {
-			err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
-			if err != nil {
-				rows.Close()
-				return nil, err
-			}
-		} else {
-			rows.Close()
-			return nil, nil
-		}
-		err = rows.Close()
-		return &account, err
 	} else {
-		rows, err := tx.Query(fmt.Sprintf("SELECT `name`, `balance`, `currency` FROM {table} WHERE `id` = %d%s;", id, lockStatement))
-		if err != nil {
-			return nil, err
-		}
-		var account Account
-		account.Id = id
-		if rows.Next() {
-			err = rows.Scan(&account.Username, &account.Balance, &account.Currency)
-			if err != nil {
-				rows.Close()
-				return nil, err
-			}
-		} else {
-			rows.Close()
-			return nil, nil
-		}
-		err = rows.Close()
-		return &account, err
+		return nil, nil
 	}
+	rows.Close()
+	return &account, nil
+}
+
+// SELECT `amount` FROM `payments2` WHERE `sender` = 15381326603262689376 AND `serial` > 0
+
+func (account *Account) GetBalance() (uint64, error) {
+	rows, err := database.Balances.Query(fmt.Sprintf("SELECT `balance`, `onSerial` FROM {table} WHERE `id` = %d;", account.Id), account.Id)
+	if err != nil {
+		return 0, err
+	}
+	var balance uint64
+	var onSerial uint64
+	if rows.Next() {
+		err = rows.Scan(&balance, &onSerial)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+	} else {
+		return 0, nil
+	}
+	rows.Close()
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `sender` = %d AND `timestamp` > %d", account.Id, onSerial), account.Id)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var amount uint64
+		err = rows.Scan(&amount)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		balance -= amount
+	}
+	rows.Close()
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `receiver` = %d AND `timestamp` > %d", account.Id, onSerial), account.Id)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var amount uint64
+		err = rows.Scan(&amount)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		balance += amount
+	}
+	rows.Close()
+	return balance, nil
+}
+
+func (account *Account) RecalculateBalance(timestamp uint64) (uint64, error) {
+	var balance uint64
+	rows, err := database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `sender` = %d", account.Id), account.Id)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var amount uint64
+		err = rows.Scan(&amount)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		balance -= amount
+	}
+	rows.Close()
+	rows, err = database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `receiver` = %d", account.Id), account.Id)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var amount uint64
+		err = rows.Scan(&amount)
+		if err != nil {
+			rows.Close()
+			return 0, err
+		}
+		balance += amount
+	}
+	rows.Close()
+	database.LastSerial.Put(account.Id, []string{"onSerial", "balance"}, []interface{}{timestamp, balance})
+	return balance, nil
 }
