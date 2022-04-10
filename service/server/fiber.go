@@ -14,6 +14,8 @@ import (
 
 var App *fiber.App
 
+var ParserPool fastjson.ParserPool
+
 type Handler interface{}
 
 type ReturnDataHandler func(ctx *fiber.Ctx) (status.Status, interface{})
@@ -138,8 +140,9 @@ func Run() error {
 }
 
 func Deserialize(jsonBytes []byte) (data *fastjson.Value, err error) {
-	var p fastjson.Parser
-	data, err = p.ParseBytes(jsonBytes)
+	parser := ParserPool.Get()
+	data, err = parser.ParseBytes(jsonBytes)
+	ParserPool.Put(parser)
 	return
 }
 
