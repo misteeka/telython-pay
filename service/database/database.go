@@ -14,7 +14,6 @@ var (
 	Accounts   *eplidr.Table
 	Balances   *eplidr.SingleKeyTable
 	Payments   *eplidr.Table
-	LastSerial *eplidr.SingleKeyTable
 	LastActive *eplidr.SingleKeyTable
 )
 
@@ -28,14 +27,14 @@ func InitDatabase() error {
 	if err != nil {
 		return err
 	}
-	defaultDriver.SetConnMaxLifetime(1 * time.Minute)
-	defaultDriver.SetConnMaxIdleTime(30 * time.Second)
+	defaultDriver.SetConnMaxLifetime(0)
+	defaultDriver.SetConnMaxIdleTime(1 * time.Minute)
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
 	Payments = eplidr.NewTable(
 		"payments",
-		16,
+		4,
 		[]string{
 			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`currency` int {nn},`timestamp` uint64 {nn});",
 			"create index index_sender on {table} (sender);",
@@ -44,30 +43,19 @@ func InitDatabase() error {
 		},
 		defaultDriver,
 	)
-	//Payments.Drop()
 	Accounts = eplidr.NewTable(
 		"accounts",
-		16,
+		4,
 		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `currency` int default 0 {nn});"},
 		defaultDriver,
 	)
-	//Accounts.Drop()
 	Balances = eplidr.NewSingleKeyTable(
 		"balances",
 		"id",
-		16,
+		4,
 		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `balance` uint64 {nn} default 0, `onSerial` uint64 {nn} default 0);"},
 		defaultDriver,
 	)
-	//Balances.Table.Drop()
-	LastSerial = eplidr.NewSingleKeyTable(
-		"lastSerial",
-		"id",
-		16,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `lastSerial` uint64 {nn} default 0);"},
-		defaultDriver,
-	)
-	//LastSerial.Table.Drop()
 
 	/*LastActive = eplidr.NewSingleKeyTable(
 		"lastactive",

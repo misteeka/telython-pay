@@ -3,7 +3,6 @@ package eplidr
 import (
 	"context"
 	"database/sql"
-	"main/log"
 )
 
 type SingleKeyTable struct {
@@ -28,80 +27,52 @@ func SingleKeyImplementation(keyTable *Table, key string) *SingleKeyTable {
 	}
 }
 
-func columnSliceToString(columns ...string) string {
-	result := ""
-	for i := 0; i < len(columns); i++ {
-		result += " `" + columns[i] + "`"
-	}
-	return result
-}
-
 func (table *SingleKeyTable) GetString(key interface{}, column string) (string, bool, error) {
-	return table.Table.GetString(table.key, key, column)
+	return table.Table.GetString(Column{Key: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetInt(key interface{}, column string) (int, bool, error) {
-	return table.Table.GetInt(table.key, key, column)
+	return table.Table.GetInt(Column{Key: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetInt64(key interface{}, column string) (int64, bool, error) {
-	return table.Table.GetInt64(table.key, key, column)
+	return table.Table.GetInt64(Column{Key: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetFloat(key interface{}, column string) (float64, bool, error) {
-	return table.Table.GetFloat(table.key, key, column)
+	return table.Table.GetFloat(Column{Key: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetUint(key interface{}, column string) (uint64, bool, error) {
-	var result uint64
-	err, found := table.Get(key, []string{column}, []interface{}{&result})
-	if err != nil {
-		return 0, found, err
-	}
-	return result, found, nil
+	return table.Table.GetUint(Column{Key: table.key, Value: key}, column)
 }
 func (table *SingleKeyTable) GetBoolean(key interface{}, column string) (bool, bool, error) {
-	var result bool
-	err, found := table.Get(key, []string{column}, []interface{}{&result})
-	if err != nil {
-		return false, found, err
-	}
-	return result, found, nil
+	return table.Table.GetBoolean(Column{Key: table.key, Value: key}, column)
 }
 
 func (table *SingleKeyTable) Get(key interface{}, columns []string, data []interface{}) (error, bool) {
-	return table.Table.Get(table.key, key, columns, data)
+	return table.Table.Get(key, Columns{Column{Key: table.key, Value: key}}, columns, data)
 }
-func (table *SingleKeyTable) Set(key interface{}, columns []string, data []interface{}) error {
-	return table.Table.Set(table.key, key, columns, data)
+func (table *SingleKeyTable) Set(key interface{}, columns []string, values []interface{}) error {
+	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, PlainToColumns(columns, values))
 }
 
-func (table *SingleKeyTable) SingleSet(key interface{}, column string, data interface{}) error {
-	return table.Table.Set(table.key, key, []string{column}, []interface{}{data})
+func (table *SingleKeyTable) SingleSet(key interface{}, column string, value interface{}) error {
+	return table.Table.Set(key, Columns{Column{Key: table.key, Value: key}}, Columns{Column{
+		Key:   column,
+		Value: value,
+	}})
 }
 
 func (table *SingleKeyTable) Put(key interface{}, columns []string, values []interface{}) error {
-	return table.Table.Put(table.key, key, columns, values)
+	return table.Table.Put(key, PlainToColumns(columns, values))
 }
 
 func (table *SingleKeyTable) Remove(key interface{}) error {
-	return table.Table.Remove(table.key, key)
+	return table.Table.Remove(table.key, Columns{Column{
+		Key:   table.key,
+		Value: key,
+	}})
 }
 
-func (table *SingleKeyTable) ReleaseRows(rows *sql.Rows) {
-	err := rows.Close()
-	if err != nil {
-		log.ErrorLogger.Println(err.Error())
-		return
-	}
-}
-
-func (table *SingleKeyTable) Begin(key interface{}) (*Tx, error) {
-	shard := table.Table.getShard(key)
-	driver, err := table.Table.Drivers[shard].Begin()
-	if err != nil {
-		return nil, err
-	}
-	return &Tx{
-		driver: driver,
-		shard:  shard,
-	}, nil
+func (table *SingleKeyTable) ReleaseRows(rows *sql.Rows) error {
+	return rows.Close()
 }
 
 func (table *SingleKeyTable) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {

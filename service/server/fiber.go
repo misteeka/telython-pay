@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fastjson"
 	"main/log"
+	"main/payments"
 	"main/status"
 	"strconv"
 	"time"
@@ -30,6 +31,10 @@ func Respond(ctx *fiber.Ctx, status status.Status) error {
 	return err
 }
 func RespondGet(ctx *fiber.Ctx, status status.Status, resp interface{}) error {
+	if resp == nil {
+		_, err := ctx.WriteString(fmt.Sprintf(`{"data": "", "status": %d}`, status))
+		return err
+	}
 	var json string
 	switch v := resp.(type) {
 	case string:
@@ -130,6 +135,9 @@ func Get(path string, handler Handler) fiber.Router {
 
 func Init() {
 	App = fiber.New(fiber.Config{
+		ReadTimeout:           time.Second * 30,
+		WriteTimeout:          time.Second * 30,
+		IdleTimeout:           time.Second * 60,
 		DisableStartupMessage: true,
 	})
 	registerHandlers()
@@ -268,7 +276,11 @@ func registerHandlers() {
 
 		authorizationStatus := authorize(username, password)
 		if authorizationStatus == status.SUCCESS {
-			return getAccountInfo(accountId)
+			requestStatus, account := getAccountInfo(accountId)
+			if requestStatus != status.SUCCESS {
+				return requestStatus, nil
+			}
+			return requestStatus, Serialize(*account)
 		} else {
 			return authorizationStatus, nil
 		}
@@ -313,9 +325,63 @@ func registerHandlers() {
 
 		authorizationStatus := authorize(username, password)
 		if authorizationStatus == status.SUCCESS {
-			return getBalance(accountId)
+			requestStatus, history := getHistory(accountId)
+			if requestStatus != status.SUCCESS {
+				return requestStatus, nil
+			}
+			bytes, err := payments.SerializePayments(*history)
+			if err != nil {
+				return status.INTERNAL_SERVER_ERROR, nil
+			}
+			return status.SUCCESS, bytes
 		} else {
 			return authorizationStatus, nil
+		}
+	}))
+	Get("/payments/getPayment", ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {
+		paymentId, err := strconv.ParseUint(ctx.FormValue("id"), 10, 64)
+		if err != nil {
+			return status.INVALID_REQUEST, nil
+		}
+		senderId, err := strconv.ParseUint(ctx.FormValue("sender"), 10, 64)
+		if err != nil {
+			return status.INVALID_REQUEST, nil
+		}
+		requesterType := ctx.FormValue("t")
+		password := ctx.FormValue("p")
+
+		if requesterType == "sender" {
+			username, found, err := getUsername(senderId)
+			if err != nil {
+				return status.INTERNAL_SERVER_ERROR, nil
+			}
+			if !found {
+				return status.AUTHORIZATION_FAILED, nil
+			}
+			authorizationStatus := authorize(username, password)
+			if authorizationStatus != status.SUCCESS {
+				return authorizationStatus, nil
+			}
+		}
+
+		getStatus, payment := getPayment(paymentId, senderId)
+		if getStatus != status.SUCCESS {
+			return getStatus, nil
+		} else {
+			if requesterType == "receiver" {
+				username, found, err := getUsername(payment.Receiver)
+				if err != nil {
+					return status.INTERNAL_SERVER_ERROR, nil
+				}
+				if !found {
+					return status.AUTHORIZATION_FAILED, nil
+				}
+				authorizationStatus := authorize(username, password)
+				if authorizationStatus != status.SUCCESS {
+					return authorizationStatus, nil
+				}
+			}
+			return status.SUCCESS, Serialize(*payment)
 		}
 	}))
 	Post("/payments/createAccount", ReturnDataHandler(func(ctx *fiber.Ctx) (status.Status, interface{}) {

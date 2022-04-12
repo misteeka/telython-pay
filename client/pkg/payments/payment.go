@@ -3,10 +3,7 @@ package payments
 import (
 	"bytes"
 	"encoding/binary"
-	"main/accounts"
-	"main/database"
-	"main/database/eplidr"
-	"strconv"
+	"encoding/json"
 )
 
 type Payment struct {
@@ -29,41 +26,11 @@ func fnv64(key string) uint64 {
 	return hash
 }
 
-func New(sender *accounts.Account, receiver *accounts.Account, amount uint64, timestamp uint64) *Payment {
-	payment := Payment{
-		Id:        fnv64(strconv.FormatUint(sender.Id, 10) + strconv.FormatUint(receiver.Id, 10) + strconv.FormatUint(timestamp, 10)),
-		Sender:    sender.Id,
-		Receiver:  receiver.Id,
-		Amount:    amount,
-		Currency:  uint64(sender.Currency),
-		Timestamp: timestamp,
-	}
-	return &payment
+func New(sender uint64, receiver uint64, amount uint64, timestamp uint64) *Payment {
+	return nil
 }
 
 func (payment *Payment) Commit() error {
-	senderShardNum := database.Accounts.GetShardNum(payment.Sender)
-	receiverShardNum := database.Accounts.GetShardNum(payment.Receiver)
-	err := database.Payments.GetShard(senderShardNum).Put(
-		eplidr.PlainToColumns(
-			[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-			[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Timestamp, payment.Currency},
-		),
-	)
-	if err != nil {
-		return err
-	}
-	if senderShardNum != receiverShardNum {
-		err = database.Payments.GetShard(receiverShardNum).Put(
-			eplidr.PlainToColumns(
-				[]string{"id", "sender", "receiver", "amount", "timestamp", "currency"},
-				[]interface{}{payment.Id, payment.Sender, payment.Receiver, payment.Amount, payment.Timestamp, payment.Currency},
-			),
-		)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -95,6 +62,14 @@ func (payment *Payment) Serialize() ([]byte, error) {
 	}
 
 	return buff.Bytes(), nil
+}
+
+func (payment Payment) SerializeReadable() ([]byte, error) {
+	jsonData, err := json.Marshal(payment)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
 }
 
 func DeserializePayment(serialized []byte) Payment {

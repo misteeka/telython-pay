@@ -80,7 +80,7 @@ func (account *Account) GetBalance() (uint64, error) {
 	return balance, nil
 }
 
-func (account *Account) RecalculateBalance(timestamp uint64) (uint64, error) {
+func (account *Account) FullScanBalance() (uint64, error) {
 	var balance uint64
 	rows, err := database.Payments.Query(fmt.Sprintf("SELECT `amount` FROM {table} WHERE `sender` = %d", account.Id), account.Id)
 	if err != nil {
@@ -110,6 +110,14 @@ func (account *Account) RecalculateBalance(timestamp uint64) (uint64, error) {
 		balance += amount
 	}
 	rows.Close()
-	database.LastSerial.Put(account.Id, []string{"onSerial", "balance"}, []interface{}{timestamp, balance})
+	return balance, nil
+}
+
+func (account *Account) RecalculateBalance(timestamp uint64) (uint64, error) {
+	balance, err := account.FullScanBalance()
+	if err != nil {
+		return 0, err
+	}
+	database.Balances.Put(account.Id, []string{"onSerial", "balance"}, []interface{}{timestamp, balance})
 	return balance, nil
 }

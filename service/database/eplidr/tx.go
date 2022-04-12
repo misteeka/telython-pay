@@ -73,7 +73,7 @@ func (tx *Tx) Get(table string, keyName interface{}, key interface{}, columns []
 	} else {
 		lockStatement = ""
 	}
-	query := fmt.Sprintf("SELECT %s FROM `%s` WHERE `%v` = %s%s;", columnSliceToString(columns...), tx.getTableName(table), keyName, value(key), lockStatement)
+	query := fmt.Sprintf("SELECT %s FROM `%s` WHERE `%v` = %s%s;", ColumnNamesToQuery(columns...), tx.getTableName(table), keyName, value(key), lockStatement)
 	rows, err := tx.Query(table, query)
 	if err != nil {
 		rows.Close()
