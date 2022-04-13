@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-const configDir = "./cfg/config.json"
+const configDir = "./service/cfg/config.json"
 
 var (
 	Value *fastjson.Value

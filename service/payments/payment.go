@@ -97,6 +97,8 @@ func (payment *Payment) Serialize() ([]byte, error) {
 	return buff.Bytes(), nil
 }
 
+// 100
+
 func DeserializePayment(serialized []byte) Payment {
 	return Payment{
 		Id:        binary.BigEndian.Uint64(serialized[0:8]),

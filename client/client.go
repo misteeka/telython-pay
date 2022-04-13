@@ -53,7 +53,6 @@ func statusToString(s status.Status) string {
 		return "TOO MANY REQUESTS"
 	}
 	return fmt.Sprintf("%v", s)
-
 }
 
 func getStatus(value *fastjson.Value) status.Status {
@@ -89,10 +88,11 @@ func gunzipWrite(w io.Writer, data []byte) error {
 	return nil
 }
 
-func GetHistory() ([]payments.Payment, error) { // TODO timestamp and currency mismatch in SerializeRreadable
-	f, err := syscall.Open("./client/data/txs/bestcompression.gz", syscall.O_RDONLY, 0644)
+func GetHistory(accountId uint64) ([]payments.Payment, error) { // TODO timestamp and currency mismatch in SerializeRreadable
+	f, err := syscall.Open(fmt.Sprintf("./client/data/txs/%d.gz", accountId), syscall.O_RDONLY, 0644)
 	if err != nil {
-		return nil, err
+		log.WarnLogger.Println("No transaction file found. Use loadHistory")
+		return nil, nil
 	}
 	var data []byte
 	buf := make([]byte, 4096)
@@ -100,8 +100,9 @@ func GetHistory() ([]payments.Payment, error) { // TODO timestamp and currency m
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(n)
 	if n == 0 {
-		log.WarnLogger.Println("Broken transaction files. Enter loadHistory to restore it")
+		log.WarnLogger.Println("Broken transaction files. Use loadHistory")
 		return nil, nil
 	}
 	for n > 0 {
@@ -129,16 +130,27 @@ func LoadHistory(accountId uint64, password string) (status.Status, error) {
 	}
 
 	// Write with BestSpeed.
-	f, _ := os.Create("./client/data/txs/bestspeed.gz")
-	w, _ := gzip.NewWriterLevel(f, gzip.BestSpeed)
-	w.Write(paymentsBytes)
-	w.Close()
+	f, err := os.Create(fmt.Sprintf("./client/data/txs/%d.gz", accountId))
+	if err != nil {
+		return status.Status(json.GetInt("status")), err
+	}
+	w, err := gzip.NewWriterLevel(f, gzip.BestSpeed)
+	if err != nil {
+		return status.Status(json.GetInt("status")), err
+	}
+	_, err = w.Write(paymentsBytes)
+	if err != nil {
+		return status.Status(json.GetInt("status")), err
+	}
+	err = w.Close()
+	if err != nil {
+		return status.Status(json.GetInt("status")), err
+	}
+	err = f.Close()
+	if err != nil {
+		return status.Status(json.GetInt("status")), err
+	}
 
-	// Write with BestCompression.
-	f, _ = os.Create("./client/data/txs/bestcompression.gz")
-	w, _ = gzip.NewWriterLevel(f, gzip.BestCompression)
-	w.Write(paymentsBytes)
-	w.Close()
 	return status.Status(json.GetInt("status")), nil
 }
 
@@ -154,6 +166,9 @@ func print(data interface{}, status status.Status, err error, start time.Time) {
 	if data != nil {
 		switch data := data.(type) {
 		case []payments.Payment:
+			if len(data) == 0 {
+				return
+			}
 			fmt.Println("Payments: ")
 			for i := 0; i < len(data); i++ {
 				printable, err := data[i].SerializeReadable()
@@ -236,7 +251,10 @@ func main() {
 			}
 			password := args[3]
 			start := time.Now()
-			status, err := SendPayment(sender, receiver, amount, password)
+			status, err := SendPayment(sender, receiver, 1, password)
+			for i := 1; i < int(amount); i++ {
+				SendPayment(sender, receiver, 1, password)
+			}
 			print(nil, status, err, start)
 		} else if strings.Compare("loadHistory", cmd) == 0 {
 			if len(args) < 2 {
@@ -253,8 +271,17 @@ func main() {
 			status, err := LoadHistory(account, password)
 			print(nil, status, err, start)
 		} else if strings.Compare("getHistory", cmd) == 0 {
+			if len(args) < 1 {
+				fmt.Println("Wrong args")
+				continue
+			}
+			account, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				fmt.Println(err.Error())
+				continue
+			}
 			start := time.Now()
-			result, err := GetHistory()
+			result, err := GetHistory(account)
 			print(result, -1, err, start)
 		} else {
 			fmt.Println("Unknown command.")

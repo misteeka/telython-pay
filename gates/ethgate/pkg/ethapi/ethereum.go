@@ -5,7 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log"
-	Models "main/ethapi/models"
+	Models "main/pkg/ethapi/models"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"

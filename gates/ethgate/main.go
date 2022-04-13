@@ -7,8 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/gorilla/mux"
 	"log"
-	"main/ethapi"
-	Models "main/ethapi/models"
+	"main/pkg/ethapi"
+	Models "main/pkg/ethapi/models"
 	"net/http"
 )
 
@@ -49,7 +49,6 @@ func (client ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "latest-block":
 		_block := ethapi.GetLatestBlock(*client.Client)
 		json.NewEncoder(w).Encode(_block)
-
 	case "get-tx":
 		if hash == "" {
 			json.NewEncoder(w).Encode(&Models.Error{
