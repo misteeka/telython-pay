@@ -3,18 +3,18 @@ package database
 import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
-	"main/cfg"
-	"main/database/eplidr"
-	"main/log"
+	"main/pkg/cfg"
+	eplidr2 "main/pkg/database/eplidr"
+	"main/pkg/log"
 	"strings"
 	"time"
 )
 
 var (
-	Accounts   *eplidr.Table
-	Balances   *eplidr.SingleKeyTable
-	Payments   *eplidr.Table
-	LastActive *eplidr.SingleKeyTable
+	Accounts   *eplidr2.Table
+	Balances   *eplidr2.SingleKeyTable
+	Payments   *eplidr2.Table
+	LastActive *eplidr2.SingleKeyTable
 )
 
 func InitDatabase() error {
@@ -32,24 +32,24 @@ func InitDatabase() error {
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Payments = eplidr.NewTable(
+	Payments = eplidr2.NewTable(
 		"payments",
 		4,
 		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`timestamp` uint64 {nn},`currency` int {nn});",
+			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`currency` int {nn},`timestamp` uint64 {nn});",
 			"create index index_sender on {table} (sender);",
 			"create index index_receiver on {table} (receiver);",
 			"create index index_serial on {table} (timestamp);",
 		},
 		defaultDriver,
 	)
-	Accounts = eplidr.NewTable(
+	Accounts = eplidr2.NewTable(
 		"accounts",
 		4,
 		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `currency` int default 0 {nn});"},
 		defaultDriver,
 	)
-	Balances = eplidr.NewSingleKeyTable(
+	Balances = eplidr2.NewSingleKeyTable(
 		"balances",
 		"id",
 		4,

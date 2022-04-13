@@ -2,7 +2,7 @@ package accounts
 
 import (
 	"fmt"
-	"main/database"
+	"main/pkg/database"
 )
 
 type Account struct {

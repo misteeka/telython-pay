@@ -3,9 +3,9 @@ package payments
 import (
 	"bytes"
 	"encoding/binary"
-	"main/accounts"
-	"main/database"
-	"main/database/eplidr"
+	"main/pkg/accounts"
+	"main/pkg/database"
+	"main/pkg/database/eplidr"
 	"strconv"
 )
 

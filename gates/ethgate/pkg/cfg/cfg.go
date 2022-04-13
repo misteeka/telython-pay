@@ -3,11 +3,11 @@ package cfg
 import (
 	"fmt"
 	"github.com/valyala/fastjson"
-	"main/log"
+	"main/pkg/log"
 	"syscall"
 )
 
-const configDir = "./service/cfg/config.json"
+const configDir = "./gates/ethgate/pkg/cfg/config.json"
 
 var (
 	Value *fastjson.Value

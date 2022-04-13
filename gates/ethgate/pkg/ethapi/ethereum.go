@@ -14,6 +14,64 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+type Account struct {
+	privKey *ecdsa.PrivateKey
+}
+
+func (account *Account) TransferEth(client ethclient.Client, to string, amount int64) (string, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	// Function requires the public address of the account we're sending from -- which we can derive from the private key.
+	publicKey := account.privKey.Public()
+	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	// Now we can read the nonce that we should use for the account's transaction.
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	value := big.NewInt(amount) // in wei (1 eth)
+	gasLimit := uint64(21000)   // in units
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	// We figure out who we're sending the ETH to.
+	toAddress := common.HexToAddress(to)
+	var data []byte
+
+	// We create the transaction payload
+	tx := types.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
+
+	chainID, err := client.NetworkID(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	// We sign the transaction using the sender's private key
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), account.privKey)
+	if err != nil {
+		return "", err
+	}
+
+	// Now we are finally ready to broadcast the transaction to the entire network
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return "", err
+	}
+
+	// We return the transaction hash
+	return signedTx.Hash().String(), nil
+}
+
 // GetLatestBlock from blockchain
 func GetLatestBlock(client ethclient.Client) *Models.Block {
 	// We add a recover function from panics to prevent our API from crashing due to an unexpected error
@@ -155,4 +213,12 @@ func GetAddressBalance(client ethclient.Client, address string) (string, error) 
 	}
 
 	return balance.String(), nil
+}
+
+func CreateAccount() (*Account, error) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	return &Account{key}, nil
 }

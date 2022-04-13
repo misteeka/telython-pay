@@ -1,10 +1,10 @@
 package main
 
 import (
-	"main/cfg"
-	"main/database"
-	"main/log"
-	"main/server"
+	"main/pkg/cfg"
+	"main/pkg/database"
+	"main/pkg/http"
+	"main/pkg/log"
 	"math/rand"
 	"runtime"
 	"time"
@@ -27,10 +27,11 @@ func main() {
 	panicIfError(database.InitDatabase())
 
 	log.InfoLogger.Println("Fiber initializing")
-	server.Init()
+	http.Init()
+	registerHandlers()
 
 	log.InfoLogger.Println("Fiber run")
-	panicIfError(server.Run())
+	panicIfError(http.Run())
 
 	log.InfoLogger.Println("Shutdown...")
 	log.InfoLogger.Println("Goodbye!")

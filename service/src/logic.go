@@ -1,13 +1,13 @@
-package server
+package main
 
 import (
 	"fmt"
-	"main/accounts"
-	"main/database"
-	"main/database/eplidr"
-	"main/log"
-	"main/payments"
-	"main/status"
+	"main/pkg/accounts"
+	"main/pkg/database"
+	"main/pkg/database/eplidr"
+	"main/pkg/log"
+	"main/pkg/payments"
+	"main/pkg/status"
 	"strconv"
 )
 

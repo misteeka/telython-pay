@@ -1,0 +1,12 @@
+{
+  "user": "root",
+  "password": "djDDI3-d3j3fH4FHhfhf-3h4uf3-dh3D3U392",
+  "dbName": "tpay",
+  "smtpHost": "smtp.yandex.com",
+  "smtpPort": 587,
+  "smtpSender": "admin@oppositemc.com",
+  "smtpPassword": "QBS-sJk-tU6-kL8",
+  "networkName": "tcp4",
+  "maxIdleConns": 100,
+  "maxOpenConns": 100
+}

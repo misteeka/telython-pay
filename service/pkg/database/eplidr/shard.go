@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"main/log"
+	"main/pkg/log"
 	"strings"
 )
 
