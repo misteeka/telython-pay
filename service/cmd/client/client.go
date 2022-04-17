@@ -9,7 +9,6 @@ import (
 	"github.com/valyala/fastjson"
 	"io"
 	"io/ioutil"
-	"main/pkg/http"
 	"main/pkg/log"
 	"main/pkg/payments"
 	"main/pkg/status"
@@ -60,15 +59,15 @@ func getStatus(value *fastjson.Value) status.Status {
 }
 
 func SendPayment(sender uint64, receiver uint64, amount uint64, password string) (status.Status, error) {
-	json, err := http.Post("sendPayment", fmt.Sprintf(`{"sender":%d,"receiver":%d,"amount":%d, "password":"%s"}`, sender, receiver, amount, password))
+	json, err := Post("sendPayment", fmt.Sprintf(`{"sender":%d,"receiver":%d,"amount":%d, "password":"%s"}`, sender, receiver, amount, password))
 	return getStatus(json), err
 }
 func GetBalance(accountId uint64, password string) (uint64, status.Status, error) {
-	json, err := http.Get("getBalance?a=" + strconv.FormatUint(accountId, 10) + "&p=" + password)
+	json, err := Get("getBalance?a=" + strconv.FormatUint(accountId, 10) + "&p=" + password)
 	return json.GetUint64("data"), getStatus(json), err
 }
 func CreateAccount(username string, password string, currency int) (uint64, status.Status, error) {
-	json, err := http.Post("createAccount", fmt.Sprintf(`{"username":"%s","password":"%s","currency":%d}`, username, password, currency))
+	json, err := Post("createAccount", fmt.Sprintf(`{"username":"%s","password":"%s","currency":%d}`, username, password, currency))
 	return json.GetUint64("data"), getStatus(json), err
 }
 
@@ -120,7 +119,7 @@ func GetHistory(accountId uint64) ([]payments.Payment, error) { // TODO timestam
 	return *payments.DeserializePayments(paymentsBytes.Bytes()), nil
 }
 func LoadHistory(accountId uint64, password string) (status.Status, error) {
-	json, err := http.Get("getHistory?a=" + strconv.FormatUint(accountId, 10) + "&p=" + password)
+	json, err := Get("getHistory?a=" + strconv.FormatUint(accountId, 10) + "&p=" + password)
 	if err != nil {
 		return 0, err
 	}
