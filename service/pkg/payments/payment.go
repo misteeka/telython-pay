@@ -3,6 +3,7 @@ package payments
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"main/pkg/accounts"
 	"main/pkg/database"
 	"main/pkg/database/eplidr"
@@ -97,7 +98,13 @@ func (payment *Payment) Serialize() ([]byte, error) {
 	return buff.Bytes(), nil
 }
 
-// 100
+func (payment Payment) SerializeReadable() ([]byte, error) {
+	jsonData, err := json.Marshal(payment)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
+}
 
 func DeserializePayment(serialized []byte) Payment {
 	return Payment{

@@ -19,7 +19,7 @@ type Table struct {
 
 type Drivers interface{}
 
-func NewTable(name string, shardsCount uint, creatingQuery []string, driverParam Drivers) *Table {
+func NewTable(name string, shardsCount uint, creatingQuery []string, driverParam Drivers) (*Table, error) {
 	var table *Table
 	switch dataSource := driverParam.(type) {
 	case []*sql.DB:
@@ -59,8 +59,7 @@ func NewTable(name string, shardsCount uint, creatingQuery []string, driverParam
 		}
 		table.Shards = shards
 	}
-	table.init()
-	return table
+	return table, table.init()
 }
 
 func Serialize(value interface{}) string {
@@ -124,12 +123,11 @@ func (table *Table) init() error {
 		table.creatingQuery[i] = strings.ReplaceAll(table.creatingQuery[i], "{n}", "NULL")
 		for a := 0; a < len(table.Shards); a++ {
 			rows, err := table.Shards[a].Query(fmt.Sprintf("SHOW TABLES LIKE '%s';", table.GetName(uint(a))))
-			if err != nil {
-				return err
-			}
-			if rows.Next() {
-				rows.Close()
-				continue
+			if err == nil {
+				if rows.Next() {
+					rows.Close()
+					continue
+				}
 			}
 			_, err = table.Shards[i].Exec(strings.Replace(table.creatingQuery[i], "{table}", fmt.Sprintf("`%s`", table.GetName(uint(a))), 1))
 			if err != nil {
@@ -244,6 +242,7 @@ func (table *Table) Get(shardKey interface{}, keys Columns, columns []string, da
 func (table *Table) Put(shardKey interface{}, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Put(values)
 }
+
 func (table *Table) Set(shardKey interface{}, keys Columns, values Columns) error {
 	return table.Shards[table.GetShardNum(shardKey)].Set(keys, values)
 }

@@ -4,17 +4,14 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"main/pkg/cfg"
-	eplidr2 "main/pkg/database/eplidr"
+	"main/pkg/database/eplidr"
 	"main/pkg/log"
 	"strings"
 	"time"
 )
 
 var (
-	Accounts   *eplidr2.Table
-	Balances   *eplidr2.SingleKeyTable
-	Payments   *eplidr2.Table
-	LastActive *eplidr2.SingleKeyTable
+	Accounts *eplidr.SingleKeyTable
 )
 
 func InitDatabase() error {
@@ -32,38 +29,16 @@ func InitDatabase() error {
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Payments = eplidr2.NewTable(
-		"payments",
-		4,
-		[]string{
-			"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn},`sender` uint64 {nn},`receiver` uint64 {nn},`amount` uint64 {nn},`timestamp` uint64 {nn},`currency` int {nn});",
-			"create index index_sender on {table} (sender);",
-			"create index index_receiver on {table} (receiver);",
-			"create index index_serial on {table} (timestamp);",
-		},
-		defaultDriver,
-	)
-	Accounts = eplidr2.NewTable(
+	Accounts, err = eplidr.NewSingleKeyTable(
 		"accounts",
-		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `currency` int default 0 {nn});"},
-		defaultDriver,
-	)
-	Balances = eplidr2.NewSingleKeyTable(
-		"balances",
 		"id",
 		4,
-		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `balance` uint64 {nn} default 0, `onSerial` uint64 {nn} default 0);"},
+		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `public` varchar(128) {nn}, `private` varchar(128) {nn});"},
 		defaultDriver,
 	)
-
-	/*LastActive = eplidr.NewSingleKeyTable(
-		"lastactive",
-		"name",
-		1,
-		"",
-		defaultDriver,
-	)*/
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"main/pkg/log"
 	"strings"
 )
 
@@ -141,12 +140,12 @@ func (shard *Shard) Remove(keys Columns) error {
 }
 
 func (shard *Shard) Exec(query string) (sql.Result, error) {
-	log.InfoLogger.Println(query)
+	//log.InfoLogger.Println(query)
 	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", shard.table.GetName(shard.num)), 1)
 	return shard.driver.Exec(query)
 }
 func (shard *Shard) Query(query string) (*sql.Rows, error) {
-	log.InfoLogger.Println(query)
+	//log.InfoLogger.Println(query)
 	query = strings.Replace(query, "{table}", fmt.Sprintf("`%s`", shard.table.GetName(shard.num)), 1)
 	return shard.driver.Query(query)
 }

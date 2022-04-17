@@ -10,14 +10,18 @@ type SingleKeyTable struct {
 	key   string
 }
 
-func NewSingleKeyTable(name string, key string, shardsCount uint, creatingQuery []string, drivers Drivers) *SingleKeyTable {
+func NewSingleKeyTable(name string, key string, shardsCount uint, creatingQuery []string, drivers Drivers) (*SingleKeyTable, error) {
 	// params:
 	// [0] dataSource
 	// [1]
-	return &SingleKeyTable{
-		Table: NewTable(name, shardsCount, creatingQuery, drivers),
-		key:   key,
+	table, err := NewTable(name, shardsCount, creatingQuery, drivers)
+	if err != nil {
+		return nil, err
 	}
+	return &SingleKeyTable{
+		Table: table,
+		key:   key,
+	}, nil
 }
 
 func SingleKeyImplementation(keyTable *Table, key string) *SingleKeyTable {

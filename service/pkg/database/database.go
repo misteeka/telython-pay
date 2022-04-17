@@ -4,17 +4,17 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"main/pkg/cfg"
-	eplidr2 "main/pkg/database/eplidr"
+	"main/pkg/database/eplidr"
 	"main/pkg/log"
 	"strings"
 	"time"
 )
 
 var (
-	Accounts   *eplidr2.Table
-	Balances   *eplidr2.SingleKeyTable
-	Payments   *eplidr2.Table
-	LastActive *eplidr2.SingleKeyTable
+	Accounts   *eplidr.Table
+	Balances   *eplidr.SingleKeyTable
+	Payments   *eplidr.Table
+	LastActive *eplidr.SingleKeyTable
 )
 
 func InitDatabase() error {
@@ -32,7 +32,7 @@ func InitDatabase() error {
 	defaultDriver.SetMaxIdleConns(cfg.GetInt("maxIdleConns"))
 	defaultDriver.SetMaxOpenConns(cfg.GetInt("maxOpenConns"))
 
-	Payments = eplidr2.NewTable(
+	Payments = eplidr.NewTable(
 		"payments",
 		4,
 		[]string{
@@ -43,13 +43,13 @@ func InitDatabase() error {
 		},
 		defaultDriver,
 	)
-	Accounts = eplidr2.NewTable(
+	Accounts = eplidr.NewTable(
 		"accounts",
 		4,
 		[]string{"CREATE TABLE IF NOT EXISTS {table} (`id` uint64 {nn} primary key, `name` varchar(255) {nn}, `currency` int default 0 {nn});"},
 		defaultDriver,
 	)
-	Balances = eplidr2.NewSingleKeyTable(
+	Balances = eplidr.NewSingleKeyTable(
 		"balances",
 		"id",
 		4,
