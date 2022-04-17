@@ -1,2 +1,0 @@
-go build
-main.exe
